@@ -1,0 +1,206 @@
+[
+  {
+    "name": "refused ID and secret sent again",
+    "file": "src/app.js",
+    "from": "if (!allowRefused && this.isRefused(cfg)) throw",
+    "to": "if (false) throw"
+  },
+  {
+    "name": "no pause after a rate limit",
+    "file": "src/app.js",
+    "from": "if (left > 0) throw new Error(t('paused'",
+    "to": "if (false) throw new Error(t('paused'"
+  },
+  {
+    "name": "pause never doubled",
+    "file": "src/app.js",
+    "from": "this.pauseStep ? Math.min(this.pauseStep * 2, PAUSE_MAX_MS) : PAUSE_MIN_MS",
+    "to": "PAUSE_MIN_MS"
+  },
+  {
+    "name": "Retry-After without a ceiling",
+    "file": "src/app.js",
+    "from": "? Math.min(err.retryAfterMs, RETRY_AFTER_MAX_MS)",
+    "to": "? err.retryAfterMs"
+  },
+  {
+    "name": "hourly limit off by one",
+    "file": "src/app.js",
+    "from": "if (sent.length >= cfg.perHour) {\n      // Free again",
+    "to": "if (sent.length > cfg.perHour) {\n      // Free again"
+  },
+  {
+    "name": "hourly limit not checked again after the queue",
+    "file": "src/app.js",
+    "from": "at = this.gate(current, { allowRefused });",
+    "to": "at = this.now();"
+  },
+  {
+    "name": "send counted after it leaves",
+    "file": "src/app.js",
+    "from": "      this.sent.push(at);\n      const saved",
+    "to": "      const saved"
+  },
+  {
+    "name": "a send that may have left refunded",
+    "file": "src/app.js",
+    "from": "if (!(err instanceof ThreemaError) || err.sent === false) this.unsend(at);",
+    "to": "this.unsend(at);"
+  },
+  {
+    "name": "a 4xx kept counted",
+    "file": "src/app.js",
+    "from": "if (!(err instanceof ThreemaError) || err.sent === false) this.unsend(at);",
+    "to": "if (!(err instanceof ThreemaError)) this.unsend(at);"
+  },
+  {
+    "name": "window of a day instead of an hour",
+    "file": "src/app.js",
+    "from": "while (this.sent.length && now - this.sent[0] >= HOUR_MS) this.sent.shift();",
+    "to": "while (this.sent.length && now - this.sent[0] >= 24 * HOUR_MS) this.sent.shift();"
+  },
+  {
+    "name": "forwarding without the option",
+    "file": "src/app.js",
+    "from": "if (!cfg.forward) throw new Error(t('forward_off'));",
+    "to": ""
+  },
+  {
+    "name": "scene recipient outside the allowed list",
+    "file": "src/app.js",
+    "from": "if (!allowed) throw new Error(t('recipient_not_allowed', 'en', { to: mask(recipient) }));\n    return allowed;",
+    "to": "return allowed ?? recipient;"
+  },
+  {
+    "name": "message ack waits for the send",
+    "file": "src/app.js",
+    "from": "      MESSAGE_ACK_MS,\n      this.timers,",
+    "to": "      60 * 60_000,\n      this.timers,"
+  },
+  {
+    "name": "request never aborted",
+    "file": "src/app.js",
+    "from": "const timer = this.timers.setTimeout(() => controller.abort(), Math.max(0, ms));",
+    "to": "const timer = this.timers.setTimeout(() => {}, Math.max(0, ms));"
+  },
+  {
+    "name": "configuration change while waiting ignored",
+    "file": "src/app.js",
+    "from": "if (!current?.ok || credsOf(current) !== credsOf(cfg)) throw new Error(t('config_changed'));\n      at = this.gate",
+    "to": "at = this.gate"
+  },
+  {
+    "name": "save awaited without a bound",
+    "file": "src/app.js",
+    "from": "const saved = await within(this.save(), SAVE_BUDGET_MS, this.timers, false);",
+    "to": "const saved = await this.save();"
+  },
+  {
+    "name": "unreadable /data written over",
+    "file": "src/app.js",
+    "from": "if (!this.storeReady) return Promise.resolve(false);",
+    "to": ""
+  },
+  {
+    "name": "unreadable /data never read again",
+    "file": "src/app.js",
+    "from": "          this.loadStore();\n        }, STORE_RETRY_MS);",
+    "to": "        }, STORE_RETRY_MS);"
+  },
+  {
+    "name": "future dates of /data kept",
+    "file": "src/app.js",
+    "from": "if (age < -60_000 || age >= HOUR_MS) continue;",
+    "to": "if (age >= HOUR_MS) continue;"
+  },
+  {
+    "name": "refusal not kept across a restart",
+    "file": "src/app.js",
+    "from": "if (!lifted) this.refused = { salt: refused.salt, fp: refused.fp };",
+    "to": "if (!lifted) this.refused = null;"
+  },
+  {
+    "name": "pause not kept across a restart",
+    "file": "src/app.js",
+    "from": "this.pauseUntil = Math.max(this.pauseUntil, now + left);",
+    "to": "this.pauseUntil = Math.max(this.pauseUntil, 0);"
+  },
+  {
+    "name": "check button blocked by a refusal",
+    "file": "src/app.js",
+    "from": "this.gate({ ...cfg, perHour: Infinity }, { allowRefused: true });\n    await this.acquire",
+    "to": "this.gate({ ...cfg, perHour: Infinity });\n    await this.acquire"
+  },
+  {
+    "name": "queue unbounded",
+    "file": "src/app.js",
+    "from": "if (this.waiting.length >= MAX_WAITING) return Promise.reject",
+    "to": "if (false) return Promise.reject"
+  },
+  {
+    "name": "two requests in flight",
+    "file": "src/app.js",
+    "from": "    if (!this.busy) {\n      this.busy = true;",
+    "to": "    if (true) {\n      this.busy = true;"
+  },
+  {
+    "name": "getConfig not retried",
+    "file": "src/app.js",
+    "from": "          this.refreshConfig(Math.min(delay * 2, CONFIG_RETRY_MAX_MS));",
+    "to": "          void 0;"
+  },
+  {
+    "name": "whole recipient in the logs",
+    "file": "src/recipients.js",
+    "from": "if (recipient.kind === 'to') return `${recipient.value.slice(0, 2)}******`;",
+    "to": "if (recipient.kind === 'to') return recipient.value;"
+  },
+  {
+    "name": "text not cut to 3,500 bytes",
+    "file": "src/app.js",
+    "from": "if (Buffer.byteLength(text, 'utf8') <= MAX_TEXT_BYTES) return text;",
+    "to": "return text;"
+  },
+  {
+    "name": "401 not a refusal",
+    "file": "src/threema.js",
+    "from": "status === 401\n      ? 'refused'",
+    "to": "status === 4010\n      ? 'refused'"
+  },
+  {
+    "name": "5xx taken as not sent",
+    "file": "src/threema.js",
+    "from": "const sent = !(status >= 300 && status < 500);",
+    "to": "const sent = false;"
+  },
+  {
+    "name": "a refused connection taken as maybe sent",
+    "file": "src/threema.js",
+    "from": "sent: !NOT_SENT_CODES.has(code),",
+    "to": "sent: true,"
+  },
+  {
+    "name": "redirect followed",
+    "file": "src/threema.js",
+    "from": "body: body.toString(),\n          redirect: 'manual',",
+    "to": "body: body.toString(),\n          redirect: 'follow',"
+  },
+  {
+    "name": "answer read without a bound",
+    "file": "src/threema.js",
+    "from": "if (size > MAX_ANSWER_BYTES) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "recipient with a line feed accepted",
+    "file": "src/recipients.js",
+    "from": "if (typeof raw !== 'string' || raw.length > 254 || CONTROL.test(raw)) return null;",
+    "to": "if (typeof raw !== 'string' || raw.length > 254) return null;"
+  },
+  {
+    "name": "forwarding on for any value",
+    "file": "src/config.js",
+    "from": "config.forward_gladys_messages === true || config.forward_gladys_messages === 'true';",
+    "to": "Boolean(config.forward_gladys_messages);"
+  }
+]

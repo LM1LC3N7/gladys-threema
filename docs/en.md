@@ -1,61 +1,82 @@
-# Demo Devices Template
+# Threema for Gladys
 
-This is the user documentation of the integration. Gladys re-hosts this file
-and shows a permanent **Documentation** link to it in the Configuration screen
-(in the user's language, with English as the fallback) — it is when
-configuring that the user needs it most. Keep the short onboarding hints in
-the `section` blocks of the manifest `config_schema`; put the long
-step-by-step (screenshots, troubleshooting…) here.
+Unofficial connector, not affiliated with Threema. It sends Threema messages from your Gladys scenes, with your
+own **Threema Gateway** account. Send only: Gladys does not read the answers.
 
-## What you get
+> This integration has never been tested with a real Threema Gateway account: it follows the official API
+> documentation. Feedback is welcome.
 
-Six demo devices show up after installation: a weather station (real data
-from Open-Meteo), a switch, a dimmable light, a smart plug with power
-metering, a motion sensor and a camera.
+## What you need
+
+- A **Threema Gateway ID in basic mode**, created on [gateway.threema.ch](https://gateway.threema.ch/en/):
+  8 characters starting with `*`, with its **API secret**.
+- Threema Gateway **credits**: every message sent uses some; they are bought from Threema.
+
+**Basic mode**: the Threema Gateway server holds the private key of your ID and prepares each message for the
+recipient itself. It is the simplest mode to set up; if you want the key to stay with you, this connector does
+not fit (end-to-end mode not supported).
 
 ## Configuration
 
-1. Open the **Configuration** tab of the integration.
-2. Set the **latitude** and **longitude** the demo weather station should
-   observe (they default to Paris), and pick your temperature unit.
-   The **refresh interval** sets how often the weather station and the
-   plug's power are read: every 5 minutes by default, every minute at most.
-3. Save: the devices appear in the **Discovery** tab, ready to be added.
+| Field                                  | Role                                                                                                                                                                                                                                                                             |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Gateway ID                             | `*XXXXXXX`, 8 characters.                                                                                                                                                                                                                                                        |
+| API secret                             | Kept by Gladys in its database, never shown again, sent only to Threema.                                                                                                                                                                                                         |
+| Allowed recipients                     | Up to 20, separated by commas: Threema IDs (8 characters), phone numbers in international format (`+41…` or `0041…`) or e-mail addresses linked to a Threema account. **The only** possible recipients of the scene action and of the test button; the first one is the default. |
+| Messages per hour, at most             | 20 by default, from 1 to 500.                                                                                                                                                                                                                                                    |
+| Also send the Gladys messages of users | Off by default (see below).                                                                                                                                                                                                                                                      |
 
-The **Prefer the local connection** toggle drives the demo plug: it reports
-the channel it actually uses as a badge (local or cloud), with an orange dot
-when it runs degraded (local refused, cloud fallback).
+Buttons:
 
-## Actions
+- **Check the account**: asks Threema for the credits left. Free, nothing sent, not counted in the limit.
+- **Send a test message**: a short message to an allowed recipient (the first one when empty). Costs credits and
+  counts in the limit.
 
-- **Test the weather provider** — performs a live request to Open-Meteo and
-  shows the current temperature and humidity under the button.
-- **Identify a device** — pick one of your devices in the list and it will
-  signal itself (the demo light "blinks" in the logs).
+## Scene action "Send a Threema message"
 
-## Scenes
+- **Text**: may hold scene variables. Beyond 3,500 bytes (the Threema limit), it is cut and ends with "…".
+- **Recipient** (optional): one of the allowed recipients, written as you like (`alice123`,
+  `+41 79 123 45 67`); empty, the first one of the list. A recipient outside the list is refused, even when it
+  comes from a scene variable: nothing is sent.
+- **Output**: `message_id`, the message ID given by Threema (empty when it could not be read).
 
-The integration adds its own cards to the scene editor (Gladys 5.1 or
-later), under the **Integrations** category:
+## Gladys messages to users (option)
 
-- **Motion detected** (trigger) — starts the scene when a demo motion sensor
-  sees something move. Optionally pick the sensor and what moved (person,
-  animal); left empty, any detection matches. The following actions can
-  read what moved with `{{triggerEvent.data.target}}`.
-- **Identify a device** (action) — makes the chosen device signal itself.
-  It returns whether the device could signal itself, so the following
-  actions can depend on it.
+This connector is also a Gladys message channel. When the administrator turns on **"Also send the Gladys
+messages of users"**, every user who enters their Threema recipient in "My account" receives through Threema
+the messages Gladys sends them: the core "Send a message" scene action, and also the Gladys notifications to
+administrators (low batteries, upgrades, weekly digest…). Each one costs credits, hence the option off by
+default. These messages count in the same hourly limit.
 
-## Dashboard
+Gladys waits 5 s for a channel to answer: the connector answers after 3.5 s at most and the send goes on (15 s
+at most); its outcome goes to the logs and the status.
 
-Add the **Demo status** widget to a dashboard: it shows the live
-temperature of the weather station and the power of the office plug, the
-connection the plug currently uses (orange when degraded) and the observed
-location. Its **Identify the light** button makes the demo light signal
-itself.
+## What protects your account
 
-## Troubleshooting
+- **Nothing leaves by itself**: not at start, not at a reconnection, not on a timer; only a scene action, a
+  click on "Send a test message", or a Gladys message when the option is on.
+- **No duplicate**: a message is never sent again. When Threema does not answer in time or the connection is
+  cut, the message may have left: the error says so, and it is not sent again.
+- **Hourly limit**: counted before the send, over a sliding hour, kept in `/data` (a restart does not reset
+  it). A message refused by Threema (400, 401, 402, 404, 413, 429) does not count; a server error (5xx), a
+  timeout or a cut connection does. When `/data` is unreadable, read-only or slow, the send does not wait
+  (1 s at most) and the status warns that the limit only holds until the next restart.
+- **One message at a time**, 10 waiting at most, the others refused.
+- **Refused ID or secret** (401): nothing more sent with them (an 8-bit fingerprint, never the secret, kept in
+  `/data`) until they change or a button succeeds.
+- **Pause** after a 429 or a server error: 60 s, doubled each time up to 1 h, or the delay Threema asks up to
+  6 h; buttons included, kept across a restart.
+- **No credits left** (402): the status says so; nothing was sent.
+- The secret, the text of the messages and whole recipients never appear in the logs, the status or `/data`:
+  an ID becomes `AL******`, a number `+…67`, an address `j…@…`.
 
-The integration logs everything it does: check the integration logs from the
-Gladys UI (or `docker logs` on the host) with `LOG_LEVEL=debug` for the full
-detail.
+## Statuses
+
+"Ready" as long as nothing was sent (the ID and the secret are only checked at the first message or with the
+"Check the account" button); "Threema Gateway answered" after a success; otherwise the reason: refusal, pause,
+limit reached, no credits, network.
+
+## Privacy
+
+The messages go through the Threema servers (Switzerland). What Threema does with them falls under the terms of
+its Gateway service.
