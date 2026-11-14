@@ -1,6 +1,6 @@
 {
   "name": "gladys-threema",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Threema for Gladys Assistant: send-only messages from scenes through your Threema Gateway account (basic mode), with an hourly limit.",
   "type": "module",

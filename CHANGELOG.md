@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-14
+
 ### Added
 
 - First version: Threema messages from Gladys through the user's own Threema
@@ -25,3 +27,6 @@ the notes of the version's GitHub Release.
 - Cost guards: hourly limit (20 by default) kept in `/data`, never a second
   try, one request at a time, a pause after a rate limit or a server error,
   a refused ID or secret never used again by itself.
+
+[Unreleased]: https://github.com/LM1LC3N7/gladys-threema/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/LM1LC3N7/gladys-threema/releases/tag/v0.1.1
