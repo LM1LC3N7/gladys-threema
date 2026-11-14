@@ -18,13 +18,13 @@ not fit (end-to-end mode not supported).
 
 ## Configuration
 
-| Field                                  | Role                                                                                                                                                                                                                                                                             |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Gateway ID                             | `*XXXXXXX`, 8 characters.                                                                                                                                                                                                                                                        |
-| API secret                             | Kept by Gladys in its database, never shown again, sent only to Threema.                                                                                                                                                                                                         |
-| Allowed recipients                     | Up to 20, separated by commas: Threema IDs (8 characters), phone numbers in international format (`+41…` or `0041…`) or e-mail addresses linked to a Threema account. **The only** possible recipients of the scene action and of the test button; the first one is the default. |
-| Messages per hour, at most             | 20 by default, from 1 to 500.                                                                                                                                                                                                                                                    |
-| Also send the Gladys messages of users | Off by default (see below).                                                                                                                                                                                                                                                      |
+| Field                                  | Role                                                                                                                                                                                                                                                                                                                            |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Gateway ID                             | `*XXXXXXX`, 8 characters.                                                                                                                                                                                                                                                                                                       |
+| API secret                             | Kept by Gladys in its database, never shown again, sent only to Threema.                                                                                                                                                                                                                                                        |
+| Allowed recipients                     | Up to 20, separated by commas: Threema IDs (8 characters), phone numbers in international format (`+41…` or `0041…`) or e-mail addresses linked to a Threema account. **The only** recipients this connector ever sends to (scene action, test button, and the "My account" recipients of users); the first one is the default. |
+| Messages per hour, at most             | 20 by default, from 1 to 500.                                                                                                                                                                                                                                                                                                   |
+| Also send the Gladys messages of users | Off by default (see below).                                                                                                                                                                                                                                                                                                     |
 
 Buttons:
 
@@ -43,18 +43,25 @@ Buttons:
 ## Gladys messages to users (option)
 
 This connector is also a Gladys message channel. When the administrator turns on **"Also send the Gladys
-messages of users"**, every user who enters their Threema recipient in "My account" receives through Threema
-the messages Gladys sends them: the core "Send a message" scene action, and also the Gladys notifications to
-administrators (low batteries, upgrades, weekly digest…). Each one costs credits, hence the option off by
-default. These messages count in the same hourly limit.
+messages of users"**, a user who enters their Threema recipient in "My account" receives through Threema the
+messages Gladys sends them, **only if this recipient is also in the allowed recipients** of the configuration
+(any user can fill "My account"; a recipient outside the list gets nothing, the logs and the status say so,
+masked). What goes through, each one costing credits and counting in the same hourly limit:
 
-Gladys waits 5 s for a channel to answer: the connector answers after 3.5 s at most and the send goes on (15 s
-at most); its outcome goes to the logs and the status.
+- the core "Send a message" scene action (to every channel, or to Threema only);
+- the answers of the core "Ask the AI" scene action, when the scene picks no channel or picks Threema;
+- the Gladys system messages to **every administrator**: Gladys upgraded (at the next start), backup failure,
+  Gladys Plus subscription, weekly digest, low batteries. The **system message channel** setting of Gladys can
+  keep them out of Threema.
+
+Gladys waits 5 s for a channel to answer: the connector answers 3.5 s after the message came in at most (even
+while its configuration or `/data` is still being read), and the send goes on behind (15 s at most for the
+request); its outcome, failure included, goes to the logs.
 
 ## What protects your account
 
 - **Nothing leaves by itself**: not at start, not at a reconnection, not on a timer; only a scene action, a
-  click on "Send a test message", or a Gladys message when the option is on.
+  click on "Send a test message", or a Gladys message when the option is on and its recipient is allowed.
 - **No duplicate**: a message is never sent again. When Threema does not answer in time or the connection is
   cut, the message may have left: the error says so, and it is not sent again.
 - **Hourly limit**: counted before the send, over a sliding hour, kept in `/data` (a restart does not reset

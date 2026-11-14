@@ -202,5 +202,95 @@
     "file": "src/config.js",
     "from": "config.forward_gladys_messages === true || config.forward_gladys_messages === 'true';",
     "to": "Boolean(config.forward_gladys_messages);"
+  },
+  {
+    "name": "config not checked again after the /data write",
+    "file": "src/app.js",
+    "from": "      const after = this.config;\n      if (!after?.ok || credsOf(after) !== credsOf(cfg)) throw new Error(t('config_changed'));\n",
+    "to": "\n"
+  },
+  {
+    "name": "stop during the /data write not checked",
+    "file": "src/app.js",
+    "from": "      if (!saved) this.setPersisted(false);\n      if (this.stopped) throw new Error(t('stopped'));",
+    "to": "      if (!saved) this.setPersisted(false);"
+  },
+  {
+    "name": "a cut connection taken as not sent",
+    "file": "src/threema.js",
+    "from": "const NOT_SENT_CODES = new Set([\n  'ENOTFOUND',",
+    "to": "const NOT_SENT_CODES = new Set([\n  'UND_ERR_SOCKET',\n  'ECONNRESET',\n  'EPIPE',\n  'ENOTFOUND',"
+  },
+  {
+    "name": "full hash of the refused secret in /data",
+    "file": "src/app.js",
+    "from": "refused: this.refused ? { ...this.refused } : null,",
+    "to": "refused: this.refused ? { ...this.refused, full: this.refusedFull } : null,"
+  },
+  {
+    "name": "20 recipients refused",
+    "file": "src/recipients.js",
+    "from": "if (list.length > MAX_RECIPIENTS) return",
+    "to": "if (list.length >= MAX_RECIPIENTS) return"
+  },
+  {
+    "name": "forwarded text not cut",
+    "file": "src/app.js",
+    "from": "      const text = cleanText(message?.text);",
+    "to": "      const text = String(message?.text ?? '').trim();"
+  },
+  {
+    "name": "credits follow redirects",
+    "file": "src/threema.js",
+    "from": "          headers,\n          redirect: 'manual',",
+    "to": "          headers,\n          redirect: 'follow',"
+  },
+  {
+    "name": "check not gated again after the queue",
+    "file": "src/app.js",
+    "from": "      this.gate({ ...cfg, perHour: Infinity }, { allowRefused: true });\n      const left",
+    "to": "      const left"
+  },
+  {
+    "name": "My account recipient outside the allowed list",
+    "file": "src/app.js",
+    "from": "const recipient = cfg.recipients.find((r) => r.key === parsed.key);",
+    "to": "const recipient = parsed;"
+  },
+  {
+    "name": "message ack counted after ready()",
+    "file": "src/app.js",
+    "from": "    const work = (async () => {\n      await this.ready();",
+    "to": "    await this.ready();\n    const work = (async () => {"
+  },
+  {
+    "name": "hanging first read of /data waited on every call",
+    "file": "src/app.js",
+    "from": "this.firstLoadWait ??= within(",
+    "to": "this.firstLoadWait = within("
+  },
+  {
+    "name": "config waiter never removed",
+    "file": "src/app.js",
+    "from": "          this.configWaiters = this.configWaiters.filter((w) => w !== done);\n",
+    "to": "\n"
+  },
+  {
+    "name": "failure after the answer not logged",
+    "file": "src/app.js",
+    "from": "this.logger.warn(`message to ${to} after the answer to Gladys",
+    "to": "void (`message to ${to} after the answer to Gladys"
+  },
+  {
+    "name": "/data writes piled up",
+    "file": "src/store.js",
+    "from": "    if (this.next) {\n      this.next.data = data;\n      return this.next.job;\n    }",
+    "to": ""
+  },
+  {
+    "name": "5xx said nothing sent",
+    "file": "src/app.js",
+    "from": "if (kind === 'unavailable') return t('server_error'",
+    "to": "if (kind === 'unavailable') return t('unexpected'"
   }
 ]

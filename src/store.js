@@ -30,6 +30,7 @@ export class FileStore {
     this.path = join(dir, name);
     this.fs = fs; // injected by the tests (the fsync calls are counted there)
     this.queue = Promise.resolve();
+    this.next = null; // the save waiting behind the running one
   }
 
   /** The saved object; {} when the file does not exist; throws when it cannot be read. */
@@ -66,29 +67,44 @@ export class FileStore {
     }
   }
 
-  /** Saves after the previous save (the last one always lands last). */
+  /**
+   * Saves after the previous save (the last one always lands last). At most
+   * one write runs and one waits: a save asked while one waits replaces its
+   * data and shares its outcome, so a /data that hangs never piles writes up.
+   */
   save(data) {
-    const write = async () => {
-      const tmp = `${this.path}.tmp`;
-      const handle = await this.fs.open(tmp, 'w', 0o600);
-      try {
-        await handle.writeFile(JSON.stringify(data), 'utf8');
-        await handle.sync();
-      } finally {
-        await handle.close();
-      }
-      await this.fs.rename(tmp, this.path);
-      // The rename itself reaches the disk only with the directory.
-      const dir = await this.fs.open(dirname(this.path), 'r');
-      try {
-        await dir.sync();
-      } finally {
-        await dir.close();
-      }
+    if (this.next) {
+      this.next.data = data;
+      return this.next.job;
+    }
+    const next = { data };
+    this.next = next;
+    const run = () => {
+      if (this.next === next) this.next = null;
+      return this.write(next.data);
     };
-    const job = this.queue.then(write, write);
-    this.queue = job.catch(() => {});
-    return job;
+    next.job = this.queue.then(run, run);
+    this.queue = next.job.catch(() => {});
+    return next.job;
+  }
+
+  async write(data) {
+    const tmp = `${this.path}.tmp`;
+    const handle = await this.fs.open(tmp, 'w', 0o600);
+    try {
+      await handle.writeFile(JSON.stringify(data), 'utf8');
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await this.fs.rename(tmp, this.path);
+    // The rename itself reaches the disk only with the directory.
+    const dir = await this.fs.open(dirname(this.path), 'r');
+    try {
+      await dir.sync();
+    } finally {
+      await dir.close();
+    }
   }
 
   flush() {

@@ -19,13 +19,13 @@ reste chez vous, ce connecteur ne convient pas (mode « End-to-end » non pris e
 
 ## Configuration
 
-| Champ                                              | Rôle                                                                                                                                                                                                                                                                                        |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Identifiant Gateway                                | `*XXXXXXX`, 8 caractères.                                                                                                                                                                                                                                                                   |
-| Secret d’API                                       | Gardé par Gladys dans sa base, jamais réaffiché, envoyé seulement à Threema.                                                                                                                                                                                                                |
-| Destinataires autorisés                            | Jusqu’à 20, séparés par des virgules : identifiants Threema (8 caractères), numéros au format international (`+33…` ou `0033…`) ou adresses e-mail liées à un compte Threema. **Les seuls** destinataires possibles de l’action de scène et du bouton de test ; le premier sert par défaut. |
-| Messages par heure, au plus                        | 20 par défaut, de 1 à 500.                                                                                                                                                                                                                                                                  |
-| Envoyer aussi les messages Gladys des utilisateurs | Désactivé par défaut (voir plus bas).                                                                                                                                                                                                                                                       |
+| Champ                                              | Rôle                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identifiant Gateway                                | `*XXXXXXX`, 8 caractères.                                                                                                                                                                                                                                                                                                                                 |
+| Secret d’API                                       | Gardé par Gladys dans sa base, jamais réaffiché, envoyé seulement à Threema.                                                                                                                                                                                                                                                                              |
+| Destinataires autorisés                            | Jusqu’à 20, séparés par des virgules : identifiants Threema (8 caractères), numéros au format international (`+33…` ou `0033…`) ou adresses e-mail liées à un compte Threema. **Les seuls** destinataires auxquels ce connecteur envoie (action de scène, bouton de test, et destinataires « Mon compte » des utilisateurs) ; le premier sert par défaut. |
+| Messages par heure, au plus                        | 20 par défaut, de 1 à 500.                                                                                                                                                                                                                                                                                                                                |
+| Envoyer aussi les messages Gladys des utilisateurs | Désactivé par défaut (voir plus bas).                                                                                                                                                                                                                                                                                                                     |
 
 Boutons :
 
@@ -46,18 +46,27 @@ Boutons :
 ## Messages de Gladys aux utilisateurs (option)
 
 Ce connecteur est aussi un canal de messages de Gladys. Si l’administrateur coche **« Envoyer aussi les messages
-Gladys des utilisateurs »**, chaque utilisateur qui saisit son destinataire Threema dans « Mon compte » reçoit
-par Threema les messages que Gladys lui envoie : l’action de scène « Envoyer un message » du cœur, et aussi les
-notifications de Gladys aux administrateurs (piles faibles, mises à jour, résumé hebdomadaire…). Chacun coûte des
-crédits, d’où l’option désactivée par défaut. Ces messages comptent dans le même plafond horaire.
+Gladys des utilisateurs »**, un utilisateur qui saisit son destinataire Threema dans « Mon compte » reçoit par
+Threema les messages que Gladys lui envoie, **seulement si ce destinataire est aussi dans les destinataires
+autorisés** de la configuration (tout utilisateur peut remplir « Mon compte » ; un destinataire hors de la liste ne
+reçoit rien, les journaux et le statut le disent, masqué). Ce qui passe, chaque message coûtant des crédits et
+comptant dans le même plafond horaire :
 
-Gladys attend 5 s la réponse d’un canal : le connecteur répond au bout de 3,5 s au plus et l’envoi continue
-(15 s au plus) ; son résultat va dans les journaux et le statut.
+- l’action de scène « Envoyer un message » du cœur (vers tous les canaux, ou vers Threema seul) ;
+- les réponses de l’action de scène « Demander à l’IA » du cœur, quand la scène ne choisit aucun canal ou choisit
+  Threema ;
+- les messages système de Gladys à **chaque administrateur** : Gladys mise à jour (au démarrage suivant), échec de
+  sauvegarde, abonnement Gladys Plus, résumé hebdomadaire, piles faibles. Le réglage **canal des messages
+  système** de Gladys peut les garder hors de Threema.
+
+Gladys attend 5 s la réponse d’un canal : le connecteur répond au plus tard 3,5 s après l’arrivée du message (même
+pendant la lecture de sa configuration ou de `/data`), et l’envoi continue derrière (15 s au plus pour la
+requête) ; son résultat, échec compris, va dans les journaux.
 
 ## Ce qui protège votre compte
 
 - **Rien ne part tout seul** : ni au démarrage, ni à une reconnexion, ni sur une minuterie ; seulement une
-  action de scène, un clic sur « Envoyer un message de test », ou un message de Gladys quand l’option est cochée.
+  action de scène, un clic sur « Envoyer un message de test », ou un message de Gladys quand l’option est cochée et son destinataire autorisé.
 - **Pas de doublon** : un message n’est jamais renvoyé. Si Threema ne répond pas à temps ou si la connexion est
   coupée, le message est peut-être parti : l’erreur le dit, et il n’est pas renvoyé.
 - **Plafond horaire** : compté avant l’envoi, sur une heure glissante, gardé dans `/data` (un redémarrage ne le

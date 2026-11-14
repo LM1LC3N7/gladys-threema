@@ -136,3 +136,16 @@ test('the text: controls removed, cut to 3,500 bytes on a character boundary', (
   // Gladys sends 4,096 characters at most: read no further.
   assert.ok(cleanText('a'.repeat(100_000)).length <= 3500);
 });
+
+test('the allowed list holds 20 recipients, not 21', () => {
+  const ids = (n) =>
+    Array.from({ length: n }, (_, i) => `USER${String(i).padStart(4, '0')}`).join(',');
+  const twenty = readConfig({ ...BASE, recipients: ids(20) });
+  assert.equal(twenty.ok, true);
+  assert.equal(twenty.recipients.length, 20);
+  assert.equal(readConfig({ ...BASE, recipients: ids(21) }).reason, 'recipients_too_many');
+});
+
+test('the text: C1 controls and Unicode line separators become spaces', () => {
+  assert.equal(cleanText('a\u0085b c d\u009fe'), 'a b c d e');
+});

@@ -43,10 +43,13 @@
 - **What may leave**: the scene action and the "Send a test message" button,
   to a recipient of the allowed list of the configuration only (a scene
   variable cannot pick a recipient outside it); the Gladys messages of users
-  (`onSendMessage`, core "Send a message" action and Gladys notifications to
-  administrators) only with the forwarding option, **off by default** (the
-  core broadcasts some notifications to every channel, and each message costs
-  credits). Nothing at start, at a reconnection, on a timer.
+  (`onSendMessage`: core "Send a message" and "Ask the AI" actions, Gladys
+  system messages to every administrator) only with the forwarding option,
+  **off by default**, and only when the user's "My account" recipient is
+  **also in the allowed list** (decision of the coordinator, review r1: any
+  account can fill "My account"; outside the list nothing leaves, an INFO
+  line and the status say so, masked). Nothing at start, at a reconnection,
+  on a timer.
 - **Never sent again**: no retry anywhere. A 4xx answer (or a connection
   refused before any byte) is "nothing sent" and is not counted; a 5xx, a
   timeout or a cut connection "may have left" and stays counted.
@@ -57,8 +60,12 @@
 - **/data never blocks a send** (same decision as gladys-amazon-polly, review
   r2 of lot 22): the write is awaited 1 s at most, the first read 2 s at
   most; the status then says the counter is not saved.
-- **Gladys message ack at 3.5 s** (Gladys waits 5 s): the send goes on up to
-  15 s, its outcome logged and shown in the status.
+- **Gladys message ack at 3.5 s from its arrival** (Gladys waits 5 s), the
+  wait for the configuration and /data included (review r1); one shared wait
+  for each (a hanging first read of /data is waited for once, 2 s); the send
+  goes on behind, and any failure after the answer is logged (WARN, masked).
+- **/data writes**: one running, one waiting at most (the latest data wins),
+  so a /data that hangs after a good read never piles writes up.
 - **Refused ID or secret** (401): 8 bits of an HMAC-SHA-256 under a random
   salt in `/data`, never the secret; nothing sent with them until they change
   or a button succeeds (both buttons try even when refused). A 401 is the

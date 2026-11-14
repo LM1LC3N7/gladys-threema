@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createThreema, ThreemaError } from '../src/threema.js';
 import { parseRecipient } from '../src/recipients.js';
+import { makeApp } from './helpers/app.js';
 
 const CFG = { identity: '*GLADYS1', secret: 'S3cr3tTestValue9' };
 
@@ -161,4 +162,34 @@ test('a refused connection is "not sent"; an abort after sending is "may have le
   assert.equal(err2.kind, 'timeout');
   assert.equal(err2.sent, true);
   assert.equal(s.requests.length, 1);
+});
+
+test('a connection cut after the request was read: "may have left", never "nothing sent"', async (t) => {
+  const s = await server(t, (r, res) => res.socket.destroy());
+  const err = await s.client.send(CFG, parseRecipient('ALICE123'), 'x').catch((e) => e);
+  assert.equal(err.kind, 'network');
+  assert.equal(err.sent, true);
+  assert.equal(s.requests.length, 1);
+  assert.ok(!err.message.includes(CFG.secret));
+});
+
+test('a cut connection through the app: counted in the hourly limit, never sent again', async (t) => {
+  const s = await server(t, (r, res) => res.socket.destroy());
+  const { app, gladys } = await makeApp({
+    threema: { client: s.client },
+  });
+  t.after(() => app.stop());
+  const ack = await gladys.fake.sceneAction('send_message', { text: 'x' });
+  assert.equal(ack.success, false);
+  assert.match(ack.error, /may have left. It is not sent again/);
+  assert.equal(app.sent.length, 1);
+  assert.equal(s.requests.length, 1);
+});
+
+test('GET /credits never follows a redirect (the secret is in its URL)', async (t) => {
+  const other = await server(t, reply(200, '99'));
+  const s = await server(t, reply(302, '', { location: `${other.base}/credits` }));
+  const err = await s.client.credits(CFG).catch((e) => e);
+  assert.equal(err.kind, 'unexpected');
+  assert.equal(other.requests.length, 0);
 });

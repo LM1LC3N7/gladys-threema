@@ -47,3 +47,25 @@ test('save: temporary file synced, renamed, then the directory synced; mode 0600
   assert.equal((await stat(join(dir, 'threema.json'))).mode & 0o777, 0o600);
   assert.equal(JSON.parse(await readFile(join(dir, 'threema.json'), 'utf8')).sent.length, 2);
 });
+
+test('save: one write running, one waiting; a hanging /data never piles writes up', async () => {
+  const writes = [];
+  let unblock;
+  const store = new FileStore({ dir: '/nowhere' });
+  store.write = (data) => {
+    writes.push(data);
+    return new Promise((resolve) => (unblock = resolve));
+  };
+  const first = store.save({ n: 1 });
+  await new Promise((resolve) => setImmediate(resolve));
+  const later = Array.from({ length: 100 }, (_, i) => store.save({ n: i + 2 }));
+  assert.equal(writes.length, 1);
+  unblock();
+  await first;
+  await new Promise((resolve) => setImmediate(resolve));
+  // The 100 saves asked meanwhile: one write, of the latest data.
+  assert.deepEqual(writes, [{ n: 1 }, { n: 101 }]);
+  unblock();
+  await Promise.all(later);
+  assert.equal(writes.length, 2);
+});

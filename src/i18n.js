@@ -138,6 +138,30 @@ export const ALL_TEXTS = {
     en: 'The Threema recipient of this user (“My account”) is not valid. Nothing was sent.',
     fr: 'Le destinataire Threema de cet utilisateur (« Mon compte ») n’est pas valide. Rien n’a été envoyé.',
   },
+  contact_not_allowed: {
+    en: 'The Threema recipient {to} of this user (“My account”) is not in the list of allowed recipients of the configuration. Nothing was sent.',
+    fr: 'Le destinataire Threema {to} de cet utilisateur (« Mon compte ») n’est pas dans la liste des destinataires autorisés de la configuration. Rien n’a été envoyé.',
+  },
+  contact_not_allowed_status: {
+    en: 'Ready, but a Gladys message was not sent: the recipient {to} of a user (“My account”) is not in the list of allowed recipients.',
+    fr: 'Prêt, mais un message de Gladys n’est pas parti : le destinataire {to} d’un utilisateur (« Mon compte ») n’est pas dans la liste des destinataires autorisés.',
+  },
+  server_error: {
+    en: 'Threema Gateway failed (HTTP {status}): the message may have left. It is not sent again, and nothing is sent before {time} (UTC).',
+    fr: 'Threema Gateway a échoué (HTTP {status}) : le message est peut-être parti. Il n’est pas renvoyé, et rien n’est envoyé avant {time} (UTC).',
+  },
+  unexpected_sent: {
+    en: 'Threema Gateway gave an unexpected answer (HTTP {status}): the message may have left. It is not sent again.',
+    fr: 'Threema Gateway a donné une réponse inattendue (HTTP {status}) : le message est peut-être parti. Il n’est pas renvoyé.',
+  },
+  check_paused: {
+    en: 'Threema Gateway asked to slow down or failed: no request before {time} (UTC). No message is sent by this button.',
+    fr: 'Threema Gateway a demandé de ralentir ou a échoué : aucune requête avant {time} (UTC). Ce bouton n’envoie aucun message.',
+  },
+  check_unreachable: {
+    en: 'Threema Gateway could not be reached or did not answer in time. No message is sent by this button.',
+    fr: 'Threema Gateway est injoignable ou n’a pas répondu à temps. Ce bouton n’envoie aucun message.',
+  },
   stopped: {
     en: 'The integration is stopping.',
     fr: 'L’intégration s’arrête.',

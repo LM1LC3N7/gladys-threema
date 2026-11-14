@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// The app on a REAL moving clock (sped up 20 times): an unreadable /data read
+// The app on a REAL moving clock (sped up 5 times): an unreadable /data read
 // again every 10 s (never early, a little late under load at most), a Gladys
 // message acked at 3.5 s while its request goes on, the request aborted at
 // 15 s and never repeated, nothing left running after stop.
@@ -20,7 +20,8 @@ import {
   memoryLogger,
 } from './helpers/app.js';
 
-const SPEED = 20;
+// Slow enough for a 200 ms margin (40 ms real) on the 3.5 s answer.
+const SPEED = 5;
 
 test('real clock: /data read every 10 s; ack at 3.5 s; request aborted at 15 s; nothing after stop', async (t) => {
   const clock = realClock({ speed: SPEED });
@@ -64,8 +65,8 @@ test('real clock: /data read every 10 s; ack at 3.5 s; request aborted at 15 s; 
   const ack = await gladys.fake.sendMessage({ recipient: ALICE }, { text: 'Hello', file: null });
   const ackedIn = clock.monotonic() - started;
   assert.equal(ack.success, true);
-  assert.ok(ackedIn >= 3_400 && ackedIn <= 4_900, `acked in ${ackedIn}`);
-  await waitFor(() => abortedAt !== undefined, 'the abort', 5_000);
+  assert.ok(ackedIn >= 3_400 && ackedIn <= 3_700, `acked in ${ackedIn}`);
+  await waitFor(() => abortedAt !== undefined, 'the abort', 10_000);
   const abortIn = abortedAt - started;
   assert.ok(abortIn >= 14_900 && abortIn <= 19_000, `aborted at ${abortIn}`);
   await waitFor(() => reads.length >= 4, '4 reads of /data', 10_000);
@@ -75,7 +76,7 @@ test('real clock: /data read every 10 s; ack at 3.5 s; request aborted at 15 s; 
 
   await app.stop();
   const count = reads.length;
-  await new Promise((resolve) => setTimeout(resolve, 1500)); // 30 s simulated
+  await new Promise((resolve) => setTimeout(resolve, 1500)); // 7.5 s simulated
   assert.equal(reads.length, count, 'no read after stop');
   assert.equal(threema.sends.length, 1);
   assert.equal(clock.live, 0, 'no timer left');

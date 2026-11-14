@@ -20,7 +20,8 @@ the notes of the version's GitHub Release.
   message ID as output; texts cut to 3,500 bytes.
 - "Check the account" (credits left, free) and "Send a test message" buttons.
 - Optional forwarding of the Gladys messages of users to their own Threema
-  recipient ("My account"), off by default.
+  recipient ("My account"), off by default, only when that recipient is also
+  in the allowed list; answered to Gladys within 3.5 s.
 - Cost guards: hourly limit (20 by default) kept in `/data`, never a second
   try, one request at a time, a pause after a rate limit or a server error,
   a refused ID or secret never used again by itself.

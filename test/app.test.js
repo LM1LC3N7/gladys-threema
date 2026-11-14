@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
 import { fp8 } from '../src/app.js';
-import { ThreemaError } from '../src/threema.js';
+import { ThreemaError, classifyThrown } from '../src/threema.js';
 import { createMemoryStore } from '../src/store.js';
 import { testClock } from './helpers/clock.js';
 import {
@@ -117,21 +117,127 @@ test('Gladys messages: refused while the option is off (the default), nothing se
   assert.equal(threema.sends.length, 0);
 });
 
-test('Gladys messages with the option on: to the user’s own recipient, any of them', async () => {
-  const { gladys, threema } = await makeApp({
+test('Gladys messages with the option on: to the user’s own recipient, only if allowed', async () => {
+  const { gladys, threema, logger } = await makeApp({
     config: { ...CONFIG, forward_gladys_messages: true },
   });
   const ack = await gladys.fake.sendMessage(
-    { recipient: 'CAROL789' },
+    { recipient: ` ${BOB.toLowerCase()} ` },
     { text: 'Hello', file: null },
   );
   assert.equal(ack.success, true, ack.error);
-  assert.equal(threema.sends[0].recipient.value, 'CAROL789');
+  assert.equal(threema.sends[0].recipient.value, BOB);
+  // Any account fills "My account": a recipient outside the list gets nothing.
+  const outside = await gladys.fake.sendMessage(
+    { recipient: '+33 6 00 00 00 01' },
+    { text: 'Alarm', file: null },
+  );
+  assert.equal(outside.success, false);
+  assert.match(outside.error, /\+…01 of this user .* is not in the list of allowed recipients/);
+  assert.ok(logger.lines.some((l) => /^info message: \+…01 is not an allowed recipient/.test(l)));
+  assert.match(lastStatus(gladys)[1], /recipient \+…01 of a user .* is not in the list/);
+  assert.equal(lastStatus(gladys)[0], true);
+  const carol = await gladys.fake.sendMessage({ recipient: 'CAROL789' }, { text: 'x', file: null });
+  assert.equal(carol.success, false);
   const bad = await gladys.fake.sendMessage({ recipient: 'nope' }, { text: 'Hello', file: null });
   assert.match(bad.error, /recipient of this user/);
   const image = await gladys.fake.sendMessage({ recipient: ALICE }, { text: '', file: 'data:x' });
   assert.match(image.error, /text is empty/);
   assert.equal(threema.sends.length, 1);
+  assert.ok(!logger.lines.join('\n').includes('33600000001'));
+  // A success clears the reason from the status.
+  await gladys.fake.sendMessage({ recipient: ALICE }, { text: 'x', file: null });
+  assert.match(lastStatus(gladys)[1], /Threema Gateway answered/);
+});
+
+test('Gladys messages: a long text is cut to 3,500 bytes too', async () => {
+  const { gladys, threema } = await makeApp({
+    config: { ...CONFIG, forward_gladys_messages: true },
+  });
+  await gladys.fake.sendMessage({ recipient: ALICE }, { text: '€'.repeat(2000), file: null });
+  const text = threema.sends[0].text;
+  assert.ok(Buffer.byteLength(text, 'utf8') <= 3500);
+  assert.ok(text.endsWith('…'));
+});
+
+test('Gladys messages: answered within 3.5 s of arrival even when the configuration comes at 1.9 s', async () => {
+  const gladys = createFakeGladys({
+    selector: SELECTOR,
+    config: { ...CONFIG, forward_gladys_messages: true },
+  });
+  const clock = testClock({ start: START });
+  const real = gladys.getConfig.bind(gladys);
+  let calls = 0;
+  gladys.getConfig = async () => {
+    calls += 1;
+    if (calls === 1) return real();
+    // The app's own read, slow (Gladys busy at start).
+    await new Promise((resolve) => clock.timers.setTimeout(resolve, 1900));
+    return real();
+  };
+  const threema = fakeThreema({ answer: hangUntilAbort });
+  await makeApp({ gladys, clock, threema });
+  let ackedAt;
+  const started = clock.monotonic();
+  const pending = gladys.fake
+    .sendMessage({ recipient: ALICE }, { text: 'Upgraded', file: null })
+    .then((a) => ((ackedAt = clock.monotonic()), a));
+  await settle();
+  await clock.advance(3400);
+  assert.equal(ackedAt, undefined);
+  await clock.advance(101);
+  const ack = await pending;
+  assert.equal(ack.success, true);
+  assert.ok(ackedAt - started <= 3501, `answered at ${ackedAt - started}`);
+  assert.equal(threema.sends.length, 1, 'the send went on');
+});
+
+test('Gladys messages: /data hanging is waited for once only, never 2 s on every message', async () => {
+  const store = createMemoryStore();
+  store.hang = true;
+  const threema = fakeThreema();
+  const { gladys, clock } = await makeApp({
+    store,
+    threema,
+    config: { ...CONFIG, forward_gladys_messages: true },
+  });
+  const first = gladys.fake.sendMessage({ recipient: ALICE }, { text: 'a', file: null });
+  await settle();
+  await clock.advance(2 * SECOND + 1);
+  assert.equal((await first).success, true);
+  // The second one: no wait at all for /data.
+  let acked;
+  gladys.fake.sendMessage({ recipient: ALICE }, { text: 'b', file: null }).then((a) => (acked = a));
+  await settle(10);
+  assert.equal(acked?.success, true);
+  assert.equal(threema.sends.length, 2);
+  // A scene too.
+  let sceneAck;
+  scene(gladys, { text: 'c' }).then((a) => (sceneAck = a));
+  await settle(10);
+  assert.equal(sceneAck?.success, true);
+});
+
+test('Gladys messages answered then dropped are logged (masked), never silent', async () => {
+  const threema = fakeThreema({ answer: hangUntilAbort });
+  const { gladys, clock, logger } = await makeApp({
+    threema,
+    config: { ...CONFIG, forward_gladys_messages: true, max_messages_per_hour: 100 },
+  });
+  const acks = Array.from({ length: 4 }, () =>
+    gladys.fake.sendMessage({ recipient: ALICE }, { text: 'x', file: null }),
+  );
+  await settle();
+  await clock.advance(3.5 * SECOND + 1);
+  for (const a of await Promise.all(acks)) assert.equal(a.success, true);
+  await clock.advance(30 * SECOND);
+  const later = logger.lines.filter((l) =>
+    l.startsWith('warn message to AL****** after the answer'),
+  );
+  assert.equal(later.length, 4, logger.lines.join('\n'));
+  assert.ok(later.some((l) => /waited too long/.test(l)));
+  assert.ok(later.some((l) => /may have left/.test(l)));
+  assert.ok(!logger.lines.join('\n').includes(ALICE));
 });
 
 test('Gladys messages: acked within 3.5 s; the send goes on, is aborted at 15 s, never repeated', async () => {
@@ -228,11 +334,18 @@ test('answered with a 4xx: not counted; a 5xx or a timeout: counted; never sent 
     /could not be reached \(network\). Nothing was sent/,
   );
   assert.equal(app.sent.length, 0);
-  threema.answer = err('network', { code: 'ECONNRESET', sent: true });
+  // A connection cut after the request left, classified as the real client does.
+  const cut = Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } });
+  threema.answer = () => {
+    throw classifyThrown(cut);
+  };
   assert.match((await scene(gladys, { text: 'x' })).error, /may have left. It is not sent again/);
   assert.equal(app.sent.length, 1);
   threema.answer = err('unavailable', { status: 500 });
-  await scene(gladys, { text: 'x' });
+  assert.match(
+    (await scene(gladys, { text: 'x' })).error,
+    /failed \(HTTP 500\): the message may have left. It is not sent again, and nothing is sent before/,
+  );
   assert.equal(app.sent.length, 2);
   assert.equal(threema.sends.length, 6, 'one request per action, never a second try');
   await clock.advance(10 * MINUTE);
@@ -597,6 +710,7 @@ test('the secret, the text and whole recipients never reach the logs, the status
   await scene(gladys, { text: TEXT, recipient: '+41791234567' });
   await scene(gladys, { text: TEXT, recipient: 'jo.doe@example.org' });
   await gladys.fake.sendMessage({ recipient: 'CAROL789' }, { text: TEXT, file: null });
+  await gladys.fake.sendMessage({ recipient: ALICE }, { text: TEXT, file: null });
   for (const kind of ['refused', 'bad_recipient', 'not_found', 'throttled']) {
     threema.answer = err(kind, {
       status: { refused: 401, bad_recipient: 400, not_found: 404, throttled: 429 }[kind],
@@ -629,4 +743,124 @@ test('stop: nothing pending, no timer left, no send after it', async () => {
   assert.equal(threema.sends.length, 1);
   assert.equal(store.loads, loads);
   assert.equal(clock.pending, 0);
+});
+
+test('/data keeps exactly { salt, fp } of a refusal: 8 bits, a brute force gets 1 in 256', async () => {
+  const threema = fakeThreema({ answer: err('refused', { status: 401 }) });
+  const store = createMemoryStore();
+  const { gladys } = await makeApp({ threema, store });
+  await scene(gladys, { text: 'x' });
+  await settle();
+  const { refused } = store.data;
+  assert.deepEqual(Object.keys(refused).sort(), ['fp', 'salt']);
+  assert.ok(Number.isInteger(refused.fp) && refused.fp >= 0 && refused.fp <= 255);
+  assert.ok(!JSON.stringify(store.data).includes(SECRET));
+  // Trying 4,096 secrets against the stored fingerprint: about 16 match, so the
+  // fingerprint never tells the secret.
+  let matches = 0;
+  for (let i = 0; i < 4096; i += 1) {
+    const candidate = { identity: IDENTITY, secret: `Candidate${i.toString(36).padStart(7, '0')}` };
+    if (fp8(refused.salt, candidate) === refused.fp) matches += 1;
+  }
+  assert.ok(matches >= 3 && matches <= 45, `${matches} matches`);
+});
+
+/** A store whose writes wait for `release()`. */
+function slowStore() {
+  const store = createMemoryStore();
+  const save = store.save;
+  store.held = [];
+  store.save = (data) =>
+    new Promise((resolve, reject) => {
+      store.held.push(() => save(data).then(resolve, reject));
+    });
+  store.release = () => {
+    for (const go of store.held.splice(0)) go();
+  };
+  return store;
+}
+
+test('configuration changed during a slow /data write: nothing sent with the old values', async () => {
+  const store = slowStore();
+  const threema = fakeThreema();
+  const { gladys, clock, app } = await makeApp({ store, threema });
+  store.release();
+  const pending = scene(gladys, { text: 'x' });
+  await settle();
+  await gladys.fake.configUpdated({ ...CONFIG, secret: SECRET_2 });
+  await clock.advance(500);
+  store.release();
+  const ack = await pending;
+  assert.match(ack.error, /configuration changed while the message was waiting/);
+  assert.equal(threema.sends.length, 0);
+  assert.equal(app.sent.length, 0);
+});
+
+test('stop during a slow /data write: no request after it', async () => {
+  const store = slowStore();
+  const threema = fakeThreema();
+  const { gladys, clock, app } = await makeApp({ store, threema });
+  store.release();
+  const pending = scene(gladys, { text: 'x' });
+  await settle();
+  const stopping = app.stop();
+  store.release();
+  await clock.advance(SECOND);
+  await stopping;
+  assert.equal((await pending).success, false);
+  assert.equal(threema.sends.length, 0);
+});
+
+test('the check button waiting behind a send is gated again: a pause met in the queue stops it', async () => {
+  let release;
+  const threema = fakeThreema({
+    answer: () =>
+      new Promise((_, reject) => {
+        release = () => reject(new ThreemaError('throttled', { status: 429, sent: false }));
+      }),
+  });
+  const { gladys } = await makeApp({ threema });
+  const send = scene(gladys, { text: 'x' });
+  await settle();
+  const check = gladys.fake.action('check_account', {});
+  await settle();
+  release();
+  await send;
+  const ack = await check;
+  assert.equal(ack.success, false);
+  assert.match(ack.error, /asked to slow down or failed: nothing is sent before/);
+  assert.equal(threema.checks.length, 0);
+});
+
+test('error texts: a check that times out sends nothing; a 201 may have left', async () => {
+  const threema = fakeThreema({ credits: hangUntilAbort });
+  const { gladys, clock, app } = await makeApp({ threema });
+  const check = gladys.fake.action('check_account', {});
+  await settle();
+  await clock.advance(15 * SECOND + 1);
+  const ack = await check;
+  assert.match(ack.error, /did not answer in time. No message is sent by this button/);
+  assert.doesNotMatch(ack.error, /may have left/);
+  threema.answer = err('unexpected', { status: 201, sent: true });
+  const created = await scene(gladys, { text: 'x' });
+  assert.match(created.error, /unexpected answer \(HTTP 201\): the message may have left/);
+  assert.equal(app.sent.length, 1);
+});
+
+test('waiting for the configuration: one waiter at most, removed at its deadline', async () => {
+  const gladys = createFakeGladys({ selector: SELECTOR, config: CONFIG });
+  const real = gladys.getConfig.bind(gladys);
+  let calls = 0;
+  gladys.getConfig = async () => {
+    calls += 1;
+    if (calls === 1) return real();
+    throw new Error('503');
+  };
+  const { app, clock } = await makeApp({ gladys });
+  const acks = Array.from({ length: 50 }, () => scene(gladys, { text: 'x' }));
+  await settle();
+  assert.ok(app.configWaiters.length <= 1, `${app.configWaiters.length} waiters`);
+  await clock.advance(2 * SECOND + 1);
+  for (const a of await Promise.all(acks)) assert.match(a.error, /configuration could not be read/);
+  assert.equal(app.configWaiters.length, 0);
 });

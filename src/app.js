@@ -72,7 +72,8 @@ function within(promise, ms, timers, fallback) {
 }
 
 /**
- * The text cleaned (control characters but tab and line feed become spaces)
+ * The text cleaned (control characters but tab and line feed, C1 controls and
+ * the Unicode line and paragraph separators become spaces)
  * and cut to 3,500 bytes of UTF-8, ending with "…" when cut.
  */
 export function cleanText(raw) {
@@ -80,7 +81,7 @@ export function cleanText(raw) {
     .slice(0, MAX_INPUT_CHARS)
     .replace(/\r\n?/g, '\n')
     // eslint-disable-next-line no-control-regex -- control characters are what it removes
-    .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, ' ')
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u2028\u2029]/g, ' ')
     .trim();
   if (Buffer.byteLength(text, 'utf8') <= MAX_TEXT_BYTES) return text;
   let out = '';
@@ -113,11 +114,13 @@ export class ThreemaApp {
     this.configLoop = null;
     this.configTimer = null;
     this.configWaiters = [];
+    this.configWait = null;
     // /data.
     this.storeReady = false;
     this.loading = null;
     this.storeTimer = null;
     this.firstLoad = null;
+    this.firstLoadWait = null;
     this.sent = []; // monotonic times of the sends of the last hour, oldest first
     this.pauseUntil = 0; // monotonic
     this.pauseStep = 0;
@@ -211,20 +214,41 @@ export class ThreemaApp {
     this.publishStatus();
   }
 
-  /** Waits (bounded) for the configuration and the first read of /data. */
-  async ready(budget = CONFIG_WAIT_MS) {
+  /**
+   * Waits (bounded) for the configuration and the first read of /data. Every
+   * caller shares one wait for each (one waiter at most, removed at its
+   * deadline); a first read of /data that never ends is waited for once only,
+   * 2 s after the first caller.
+   */
+  async ready() {
     const waits = [];
     if (!this.configRead) {
       if (!this.configLoop && !this.configTimer) this.refreshConfig(CONFIG_RETRY_MIN_MS);
-      waits.push(
-        within(new Promise((resolve) => this.configWaiters.push(resolve)), budget, this.timers),
-      );
+      waits.push(this.waitConfig(CONFIG_WAIT_MS));
     }
     if (!this.storeReady && this.firstLoad) {
-      waits.push(within(this.firstLoad, Math.min(budget, STORE_LOAD_BUDGET_MS), this.timers));
+      this.firstLoadWait ??= within(this.firstLoad, STORE_LOAD_BUDGET_MS, this.timers);
+      waits.push(this.firstLoadWait);
     }
     await Promise.all(waits);
     if (this.stopped) throw new Error(t('stopped'));
+  }
+
+  /** One shared wait for the configuration, `ms` at most, its waiter removed at the end. */
+  waitConfig(ms) {
+    if (!this.configWait) {
+      this.configWait = new Promise((resolve) => {
+        const done = () => {
+          this.timers.clearTimeout(timer);
+          this.configWaiters = this.configWaiters.filter((w) => w !== done);
+          this.configWait = null;
+          resolve();
+        };
+        const timer = this.timers.setTimeout(done, Math.max(0, ms));
+        this.configWaiters.push(done);
+      });
+    }
+    return this.configWait;
   }
 
   /** The configuration, usable, or throws why not. */
@@ -424,19 +448,34 @@ export class ThreemaApp {
 
   /** onSendMessage: a Gladys message to a user, only when the option is on. */
   async onMessage(contact, message) {
+    // Gladys waits 5 s for the ack: it leaves 3.5 s after the message came in
+    // at most, whatever happens (the configuration or /data still unread
+    // included); the send goes on behind, and any later failure is logged.
     const deadline = this.now() + ACTION_DEADLINE_MS;
-    await this.ready();
-    const cfg = this.usableConfig();
-    if (!cfg.forward) throw new Error(t('forward_off'));
-    const recipient = parseRecipient(contact?.recipient);
-    if (!recipient) throw new Error(t('contact_invalid'));
-    const text = cleanText(message?.text);
-    if (!text) throw new Error(t('empty_text'));
-    // Gladys waits 5 s for the ack: answered at 3.5 s at most; the send goes
-    // on and its outcome is logged and shown in the status.
-    const job = this.deliver({ recipient, text, deadline, origin: 'message' });
+    let to = 'an unchecked recipient';
+    const work = (async () => {
+      await this.ready();
+      const cfg = this.usableConfig();
+      if (!cfg.forward) throw new Error(t('forward_off'));
+      const parsed = parseRecipient(contact?.recipient);
+      if (!parsed) throw new Error(t('contact_invalid'));
+      to = mask(parsed);
+      // The recipient a user typed in "My account" must also be in the list
+      // the administrator allowed: nobody else is ever paid for.
+      const recipient = cfg.recipients.find((r) => r.key === parsed.key);
+      if (!recipient) {
+        this.logger.info(`message: ${to} is not an allowed recipient, nothing sent`);
+        this.outcome = 'contact_not_allowed';
+        this.outcomeVars = { to };
+        this.publishStatus();
+        throw new Error(t('contact_not_allowed', 'en', { to }));
+      }
+      const text = cleanText(message?.text);
+      if (!text) throw new Error(t('empty_text'));
+      return this.deliver({ recipient, text, deadline, origin: 'message' });
+    })();
     const result = await within(
-      job.then(
+      work.then(
         () => 'sent',
         (err) => err,
       ),
@@ -445,6 +484,12 @@ export class ThreemaApp {
       'pending',
     );
     if (result instanceof Error) throw result;
+    if (result === 'pending') {
+      // Already answered: a failure from now on reaches only the logs.
+      work.catch((err) =>
+        this.logger.warn(`message to ${to} after the answer to Gladys: ${err?.message ?? 'error'}`),
+      );
+    }
     return undefined;
   }
 
@@ -491,7 +536,7 @@ export class ThreemaApp {
         credits = await this.withTimeout(left, (signal) => this.threema.credits(cfg, signal));
       } catch (err) {
         this.failed(err, cfg, null);
-        throw new Error(this.message(err, null), { cause: err });
+        throw new Error(this.message(err, null, { check: true }), { cause: err });
       }
       this.succeededWith(cfg);
       this.logger.info(`account checked: ${credits} credits left`);
@@ -615,12 +660,21 @@ export class ThreemaApp {
     this.publishStatus();
   }
 
-  message(err, recipient) {
+  message(err, recipient, { check = false } = {}) {
     const kind = err instanceof ThreemaError ? err.kind : 'network';
-    if (kind === 'throttled' || kind === 'unavailable') {
-      return t('paused', 'en', { time: this.timeIn(this.pausedFor()) });
+    const time = this.timeIn(this.pausedFor());
+    if (check) {
+      // The check button sends no message: never "may have left".
+      if (kind === 'throttled' || kind === 'unavailable') return t('check_paused', 'en', { time });
+      if (kind === 'timeout' || kind === 'network') return t('check_unreachable');
+      return t(kind, 'en', { status: err?.status ?? '' });
     }
+    if (kind === 'throttled') return t('paused', 'en', { time });
+    if (kind === 'unavailable') return t('server_error', 'en', { time, status: err?.status ?? '' });
     if (kind === 'network' && err?.sent === false) return t('network_not_sent');
+    if (kind === 'unexpected' && err?.sent !== false) {
+      return t('unexpected_sent', 'en', { status: err?.status ?? '' });
+    }
     return t(kind, 'en', { to: mask(recipient), status: err?.status ?? '' });
   }
 
@@ -650,6 +704,9 @@ export class ThreemaApp {
       return { ok: true, key: 'not_persisted' };
     }
     if (this.outcome === 'working') return { ok: true, key: 'working' };
+    if (this.outcome === 'contact_not_allowed') {
+      return { ok: true, key: 'contact_not_allowed_status', vars: this.outcomeVars };
+    }
     if (this.outcome !== 'ready' && this.outcome !== 'refused') {
       return { ok: false, key: this.outcome, vars: this.outcomeVars };
     }

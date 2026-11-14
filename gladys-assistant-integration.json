@@ -12,12 +12,17 @@
   "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-threema/main/cover.png",
   "categories": ["notifications"],
   "transports": ["cloud"],
-  "messaging": { "receive": false },
+  "messaging": {
+    "receive": false
+  },
   "config_schema": [
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Your Threema Gateway account", "fr": "Votre compte Threema Gateway" },
+      "label": {
+        "en": "Your Threema Gateway account",
+        "fr": "Votre compte Threema Gateway"
+      },
       "description": {
         "en": "Unofficial connector, not affiliated with Threema. It needs a Threema Gateway ID in basic mode, created on gateway.threema.ch. In basic mode the Gateway server holds the private key of this ID and prepares each message for the recipient itself. Every message costs credits, bought from Threema. Send only: Gladys cannot read the answers. Nothing leaves without a scene action or a click on a button, and never more than the hourly limit below.",
         "fr": "Connecteur non officiel, sans lien avec Threema. Il faut un identifiant Threema Gateway en mode simple (basic), créé sur gateway.threema.ch. En mode simple, le serveur Gateway détient la clé privée de cet identifiant et prépare lui-même chaque message pour le destinataire. Chaque message coûte des crédits, achetés à Threema. Envoi seul : Gladys ne peut pas lire les réponses. Rien ne part sans action de scène ou clic sur un bouton, et jamais plus que le plafond horaire ci-dessous."
@@ -25,33 +30,51 @@
       "links": [
         {
           "url": "https://gateway.threema.ch/en/",
-          "label": { "en": "Threema Gateway", "fr": "Threema Gateway" }
+          "label": {
+            "en": "Threema Gateway",
+            "fr": "Threema Gateway"
+          }
         },
         {
           "url": "https://github.com/LM1LC3N7/gladys-threema/blob/main/docs/fr.md",
-          "label": { "en": "Guide (French)", "fr": "Guide (français)" }
+          "label": {
+            "en": "Guide (French)",
+            "fr": "Guide (français)"
+          }
         },
         {
           "url": "https://github.com/LM1LC3N7/gladys-threema/blob/main/docs/en.md",
-          "label": { "en": "Guide (English)", "fr": "Guide (anglais)" }
+          "label": {
+            "en": "Guide (English)",
+            "fr": "Guide (anglais)"
+          }
         }
       ]
     },
     {
       "key": "identity",
       "type": "string",
-      "label": { "en": "Gateway ID", "fr": "Identifiant Gateway" },
+      "label": {
+        "en": "Gateway ID",
+        "fr": "Identifiant Gateway"
+      },
       "description": {
         "en": "The Gateway ID in basic mode: 8 characters starting with *.",
         "fr": "L’identifiant Gateway en mode simple : 8 caractères commençant par *."
       },
-      "placeholder": { "en": "e.g. *GLADYS1", "fr": "ex. *GLADYS1" },
+      "placeholder": {
+        "en": "e.g. *GLADYS1",
+        "fr": "ex. *GLADYS1"
+      },
       "required": true
     },
     {
       "key": "secret",
       "type": "secret",
-      "label": { "en": "API secret", "fr": "Secret d’API" },
+      "label": {
+        "en": "API secret",
+        "fr": "Secret d’API"
+      },
       "description": {
         "en": "The API secret of this ID (gateway.threema.ch, your ID). Kept by Gladys in its database, never shown again, sent only to Threema.",
         "fr": "Le secret d’API de cet identifiant (gateway.threema.ch, votre identifiant). Gardé par Gladys dans sa base, jamais réaffiché, envoyé seulement à Threema."
@@ -61,18 +84,27 @@
     {
       "key": "recipients",
       "type": "string",
-      "label": { "en": "Allowed recipients", "fr": "Destinataires autorisés" },
-      "description": {
-        "en": "The only recipients of the scene action and of the test button, separated by commas (20 at most): Threema IDs (8 characters), phone numbers in international format (+41…) or e-mail addresses linked to a Threema account. The first one is used when a scene names none.",
-        "fr": "Les seuls destinataires de l’action de scène et du bouton de test, séparés par des virgules (20 au plus) : identifiants Threema (8 caractères), numéros au format international (+33…) ou adresses e-mail liées à un compte Threema. Le premier sert quand une scène n’en nomme aucun."
+      "label": {
+        "en": "Allowed recipients",
+        "fr": "Destinataires autorisés"
       },
-      "placeholder": { "en": "e.g. ECHOECHO, +41791234567", "fr": "ex. ECHOECHO, +33612345678" },
+      "description": {
+        "en": "The only recipients this integration ever sends to, separated by commas (20 at most): Threema IDs (8 characters), phone numbers in international format (+41…) or e-mail addresses linked to a Threema account. The first one is used when a scene names none. A user's “My account” recipient must be in this list too.",
+        "fr": "Les seuls destinataires auxquels ce module envoie, séparés par des virgules (20 au plus) : identifiants Threema (8 caractères), numéros au format international (+33…) ou adresses e-mail liées à un compte Threema. Le premier sert quand une scène n’en nomme aucun. Le destinataire de « Mon compte » d’un utilisateur doit aussi être dans cette liste."
+      },
+      "placeholder": {
+        "en": "e.g. ECHOECHO, +41791234567",
+        "fr": "ex. ECHOECHO, +33612345678"
+      },
       "required": false
     },
     {
       "key": "max_messages_per_hour",
       "type": "number",
-      "label": { "en": "Messages per hour, at most", "fr": "Messages par heure, au plus" },
+      "label": {
+        "en": "Messages per hour, at most",
+        "fr": "Messages par heure, au plus"
+      },
       "description": {
         "en": "Beyond it, nothing is sent until the oldest message of the last hour is an hour old (from 1 to 500). Every path counts: scenes, buttons and forwarded Gladys messages.",
         "fr": "Au-delà, rien n’est envoyé avant que le plus ancien message de la dernière heure ait une heure (de 1 à 500). Tout compte : scènes, boutons et messages de Gladys transmis."
@@ -90,8 +122,8 @@
         "fr": "Envoyer aussi les messages Gladys des utilisateurs"
       },
       "description": {
-        "en": "Off by default. On: every message Gladys sends to a user who entered a Threema recipient in “My account” goes through Threema too (the core “Send a message” scene action, and Gladys notifications to administrators such as low batteries or upgrades), each one costing credits.",
-        "fr": "Désactivé par défaut. Activé : chaque message que Gladys envoie à un utilisateur ayant saisi un destinataire Threema dans « Mon compte » passe aussi par Threema (l’action de scène « Envoyer un message » du cœur, et les notifications de Gladys aux administrateurs comme les piles faibles ou les mises à jour), chacun coûtant des crédits."
+        "en": "Off by default. On: the messages Gladys sends to a user whose “My account” recipient is in the allowed list go through Threema too, each one costing credits: the core “Send a message” and “Ask the AI” scene actions, and the Gladys system messages to administrators (upgrade at the next start, backup failure, Gladys Plus, weekly digest, low batteries) unless the system message channel setting of Gladys keeps them elsewhere.",
+        "fr": "Désactivé par défaut. Activé : les messages que Gladys envoie à un utilisateur dont le destinataire de « Mon compte » est dans la liste autorisée passent aussi par Threema, chacun coûtant des crédits : les actions de scène « Envoyer un message » et « Demander à l’IA » du cœur, et les messages système de Gladys aux administrateurs (mise à jour au démarrage suivant, échec de sauvegarde, Gladys Plus, résumé hebdomadaire, piles faibles), sauf si le réglage du canal des messages système de Gladys les envoie ailleurs."
       },
       "default": false,
       "required": false
@@ -101,12 +133,18 @@
     {
       "key": "recipient",
       "type": "string",
-      "label": { "en": "My Threema recipient", "fr": "Mon destinataire Threema" },
-      "description": {
-        "en": "Your Threema ID (8 characters), or the phone number (+41…) or e-mail address linked to your Threema account. Used only when the administrator turned on “Also send the Gladys messages of users”.",
-        "fr": "Votre identifiant Threema (8 caractères), ou le numéro (+33…) ou l’adresse e-mail liés à votre compte Threema. Utilisé seulement si l’administrateur a activé « Envoyer aussi les messages Gladys des utilisateurs »."
+      "label": {
+        "en": "My Threema recipient",
+        "fr": "Mon destinataire Threema"
       },
-      "placeholder": { "en": "e.g. ECHOECHO", "fr": "ex. ECHOECHO" },
+      "description": {
+        "en": "Your Threema ID (8 characters), or the phone number (+41…) or e-mail address linked to your Threema account. Used only when the administrator turned on “Also send the Gladys messages of users” AND put this recipient in the allowed list.",
+        "fr": "Votre identifiant Threema (8 caractères), ou le numéro (+33…) ou l’adresse e-mail liés à votre compte Threema. Utilisé seulement si l’administrateur a activé « Envoyer aussi les messages Gladys des utilisateurs » ET mis ce destinataire dans la liste autorisée."
+      },
+      "placeholder": {
+        "en": "e.g. ECHOECHO",
+        "fr": "ex. ECHOECHO"
+      },
       "required": true
     }
   ],
@@ -114,7 +152,10 @@
     {
       "key": "check_account",
       "timeout_seconds": 30,
-      "label": { "en": "Check the account", "fr": "Vérifier le compte" },
+      "label": {
+        "en": "Check the account",
+        "fr": "Vérifier le compte"
+      },
       "description": {
         "en": "Asks Threema for the credits left with the saved ID and secret. Free: nothing is sent.",
         "fr": "Demande à Threema les crédits restants avec l’identifiant et le secret enregistrés. Gratuit : rien n’est envoyé."
@@ -123,7 +164,10 @@
     {
       "key": "send_test",
       "timeout_seconds": 30,
-      "label": { "en": "Send a test message", "fr": "Envoyer un message de test" },
+      "label": {
+        "en": "Send a test message",
+        "fr": "Envoyer un message de test"
+      },
       "description": {
         "en": "Sends a short test message to an allowed recipient (the first one when empty). Costs credits and counts in the hourly limit.",
         "fr": "Envoie un court message de test à un destinataire autorisé (le premier si vide). Coûte des crédits et compte dans le plafond horaire."
@@ -137,7 +181,10 @@
             "en": "Recipient (empty: the first allowed one)",
             "fr": "Destinataire (vide : le premier autorisé)"
           },
-          "placeholder": { "en": "e.g. ECHOECHO", "fr": "ex. ECHOECHO" }
+          "placeholder": {
+            "en": "e.g. ECHOECHO",
+            "fr": "ex. ECHOECHO"
+          }
         }
       ]
     }
@@ -145,7 +192,10 @@
   "scene_actions": [
     {
       "key": "send_message",
-      "label": { "en": "Send a Threema message", "fr": "Envoyer un message Threema" },
+      "label": {
+        "en": "Send a Threema message",
+        "fr": "Envoyer un message Threema"
+      },
       "description": {
         "en": "Sends a text to one of the allowed recipients of the configuration (the first one when empty). Texts over 3,500 bytes are cut. Costs credits; refused beyond the hourly limit. Never sent again after a failure.",
         "fr": "Envoie un texte à l’un des destinataires autorisés de la configuration (le premier si vide). Les textes de plus de 3 500 octets sont coupés. Coûte des crédits ; refusé au-delà du plafond horaire. Jamais renvoyé après un échec."
@@ -156,7 +206,10 @@
           "key": "text",
           "type": "string",
           "required": true,
-          "label": { "en": "Text", "fr": "Texte" }
+          "label": {
+            "en": "Text",
+            "fr": "Texte"
+          }
         },
         {
           "key": "recipient",
@@ -166,7 +219,10 @@
             "en": "Recipient, from the allowed list (empty: the first one)",
             "fr": "Destinataire, parmi la liste autorisée (vide : le premier)"
           },
-          "placeholder": { "en": "e.g. ECHOECHO", "fr": "ex. ECHOECHO" }
+          "placeholder": {
+            "en": "e.g. ECHOECHO",
+            "fr": "ex. ECHOECHO"
+          }
         }
       ],
       "outputs": [
