@@ -86,8 +86,8 @@
   {
     "name": "configuration change while waiting ignored",
     "file": "src/app.js",
-    "from": "if (!current?.ok || credsOf(current) !== credsOf(cfg)) throw new Error(t('config_changed'));\n      at = this.gate",
-    "to": "at = this.gate"
+    "from": "if (!current?.ok || credsOf(current) !== credsOf(cfg)) throw new Error(t('config_changed'));\n      this.stillAllowed(current",
+    "to": "this.stillAllowed(current"
   },
   {
     "name": "save awaited without a bound",
@@ -292,5 +292,53 @@
     "file": "src/app.js",
     "from": "if (kind === 'unavailable') return t('server_error'",
     "to": "if (kind === 'unavailable') return t('unexpected'"
+  },
+  {
+    "name": "shared config wait never reset",
+    "file": "src/app.js",
+    "from": "          this.configWaiters = this.configWaiters.filter((w) => w !== done);\n          this.configWait = null;",
+    "to": "          this.configWaiters = this.configWaiters.filter((w) => w !== done);"
+  },
+  {
+    "name": "a 4xx unexpected said may have left",
+    "file": "src/app.js",
+    "from": "if (kind === 'unexpected' && err?.sent !== false) {",
+    "to": "if (kind === 'unexpected') {"
+  },
+  {
+    "name": "check network error said may have left",
+    "file": "src/app.js",
+    "from": "if (kind === 'timeout' || kind === 'network') return t('check_unreachable');",
+    "to": "if (kind === 'timeout') return t('check_unreachable');"
+  },
+  {
+    "name": "allowed list not checked again after the queue",
+    "file": "src/app.js",
+    "from": "      this.stillAllowed(current, recipient, origin);\n",
+    "to": ""
+  },
+  {
+    "name": "allowed list not checked again after the /data write",
+    "file": "src/app.js",
+    "from": "      this.stillAllowed(after, recipient, origin);\n",
+    "to": ""
+  },
+  {
+    "name": "option not checked again before a Gladys message leaves",
+    "file": "src/app.js",
+    "from": "if (origin === 'message' && !cfg.forward) throw new Error(t('forward_off'));",
+    "to": ""
+  },
+  {
+    "name": "contact note hides an account problem",
+    "file": "src/app.js",
+    "from": "    if (this.outcome !== 'ready' && this.outcome !== 'refused' && this.outcome !== 'working') {\n      return { ok: false, key: this.outcome, vars: this.outcomeVars };\n    }\n    // Only while",
+    "to": "    // Only while"
+  },
+  {
+    "name": "contact note kept after the list changed",
+    "file": "src/app.js",
+    "from": "if (this.contactNote && this.contactNote.list === listOf(cfg)) {",
+    "to": "if (this.contactNote) {"
   }
 ]

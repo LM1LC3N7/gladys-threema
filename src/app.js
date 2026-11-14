@@ -54,6 +54,7 @@ import { mask, parseRecipient } from './recipients.js';
 import { ThreemaError } from './threema.js';
 
 const credsOf = (cfg) => `${cfg.identity}\n${cfg.secret}`;
+const listOf = (cfg) => (cfg?.ok ? cfg.recipients.map((r) => r.key).join(',') : '');
 const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 export const fp8 = (salt, cfg) => createHmac('sha256', salt).update(credsOf(cfg)).digest()[0];
 const isInt = (n, min, max) => Number.isInteger(n) && n >= min && n <= max;
@@ -134,6 +135,7 @@ export class ThreemaApp {
     // Status.
     this.outcome = 'ready';
     this.outcomeVars = {};
+    this.contactNote = null; // { to, list }: a Gladys message refused for its recipient
     this.lastStatus = null;
     this.persisted = undefined;
   }
@@ -465,8 +467,8 @@ export class ThreemaApp {
       const recipient = cfg.recipients.find((r) => r.key === parsed.key);
       if (!recipient) {
         this.logger.info(`message: ${to} is not an allowed recipient, nothing sent`);
-        this.outcome = 'contact_not_allowed';
-        this.outcomeVars = { to };
+        // A note beside the outcome: it never hides a problem of the account.
+        this.contactNote = { to, list: listOf(cfg) };
         this.publishStatus();
         throw new Error(t('contact_not_allowed', 'en', { to }));
       }
@@ -573,6 +575,7 @@ export class ThreemaApp {
       // Things may have changed while waiting: the configuration, a refusal, a pause, the count.
       const current = this.config;
       if (!current?.ok || credsOf(current) !== credsOf(cfg)) throw new Error(t('config_changed'));
+      this.stillAllowed(current, recipient, origin);
       at = this.gate(current, { allowRefused });
       if (deadline - this.now() <= 0) throw new Error(t('deadline'));
       // Counted in memory before it leaves (the limit always holds while the
@@ -585,6 +588,7 @@ export class ThreemaApp {
       if (this.stopped) throw new Error(t('stopped'));
       const after = this.config;
       if (!after?.ok || credsOf(after) !== credsOf(cfg)) throw new Error(t('config_changed'));
+      this.stillAllowed(after, recipient, origin);
       const left = Math.min(REQUEST_TIMEOUT_MS, deadline - this.now());
       if (left <= 0) throw new Error(t('deadline'));
       const started = this.now();
@@ -614,6 +618,14 @@ export class ThreemaApp {
     }
   }
 
+  /** The recipient (and, for a Gladys message, the option) still allowed by the configuration now. */
+  stillAllowed(cfg, recipient, origin) {
+    if (origin === 'message' && !cfg.forward) throw new Error(t('forward_off'));
+    if (!cfg.recipients.some((r) => r.key === recipient.key)) {
+      throw new Error(t('recipient_not_allowed', 'en', { to: mask(recipient) }));
+    }
+  }
+
   unsend(at) {
     const i = this.sent.lastIndexOf(at);
     if (i >= 0) {
@@ -630,6 +642,7 @@ export class ThreemaApp {
     this.succeeded = { identity: cfg.identity, secret: cfg.secret };
     this.outcome = 'working';
     this.outcomeVars = {};
+    this.contactNote = null;
     this.save();
     this.publishStatus();
   }
@@ -703,13 +716,14 @@ export class ThreemaApp {
     ) {
       return { ok: true, key: 'not_persisted' };
     }
-    if (this.outcome === 'working') return { ok: true, key: 'working' };
-    if (this.outcome === 'contact_not_allowed') {
-      return { ok: true, key: 'contact_not_allowed_status', vars: this.outcomeVars };
-    }
-    if (this.outcome !== 'ready' && this.outcome !== 'refused') {
+    if (this.outcome !== 'ready' && this.outcome !== 'refused' && this.outcome !== 'working') {
       return { ok: false, key: this.outcome, vars: this.outcomeVars };
     }
+    // Only while the list it was refused against is still the list.
+    if (this.contactNote && this.contactNote.list === listOf(cfg)) {
+      return { ok: true, key: 'contact_not_allowed_status', vars: { to: this.contactNote.to } };
+    }
+    if (this.outcome === 'working') return { ok: true, key: 'working' };
     return { ok: true, key: 'ready' };
   }
 

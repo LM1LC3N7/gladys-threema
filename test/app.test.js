@@ -864,3 +864,147 @@ test('waiting for the configuration: one waiter at most, removed at its deadline
   for (const a of await Promise.all(acks)) assert.match(a.error, /configuration could not be read/);
   assert.equal(app.configWaiters.length, 0);
 });
+
+test('a recipient refused from "My account" never hides a problem of the account; gone when the list changes', async () => {
+  const threema = fakeThreema({ answer: err('no_credits', { status: 402 }) });
+  const { gladys } = await makeApp({
+    threema,
+    config: { ...CONFIG, forward_gladys_messages: true },
+  });
+  await scene(gladys, { text: 'x' });
+  assert.match(lastStatus(gladys)[1], /no credits left/);
+  await gladys.fake.sendMessage({ recipient: 'CAROL789' }, { text: 'x', file: null });
+  assert.equal(lastStatus(gladys)[0], false);
+  assert.match(lastStatus(gladys)[1], /no credits left/);
+  // Credits back (the same values saved again keep the outcome): the note shows...
+  threema.answer = () => ({ messageId: MESSAGE_ID });
+  const fresh = await makeApp({ config: { ...CONFIG, forward_gladys_messages: true } });
+  await fresh.gladys.fake.sendMessage({ recipient: 'CAROL789' }, { text: 'x', file: null });
+  assert.match(lastStatus(fresh.gladys)[1], /recipient CA\*{6} of a user/);
+  // ...until the list changes, with the same ID and secret.
+  await fresh.gladys.fake.configUpdated({
+    ...CONFIG,
+    recipients: `${CONFIG.recipients}, CAROL789`,
+    forward_gladys_messages: true,
+  });
+  assert.doesNotMatch(lastStatus(fresh.gladys)[1], /of a user/);
+});
+
+test('allowed list and option checked again just before the request', async () => {
+  let release;
+  const threema = fakeThreema({
+    answer: () => new Promise((resolve) => (release = () => resolve({ messageId: MESSAGE_ID }))),
+  });
+  const config = { ...CONFIG, forward_gladys_messages: true };
+  const { gladys, app } = await makeApp({ threema, config });
+  // A send in flight; behind it, a scene to BOB and a Gladys message to ALICE.
+  const first = scene(gladys, { text: 'a' });
+  await settle();
+  const toBob = scene(gladys, { text: 'b', recipient: BOB });
+  const toAlice = gladys.fake.sendMessage({ recipient: ALICE }, { text: 'c', file: null });
+  await settle();
+  // BOB leaves the list, the option is turned off.
+  await gladys.fake.configUpdated({ ...CONFIG, recipients: ALICE });
+  release();
+  assert.equal((await first).success, true);
+  await settle(10);
+  const b = await toBob;
+  assert.match(b.error, /BO\*{6} is not in the list of allowed recipients/);
+  await toAlice;
+  await settle(10);
+  assert.equal(threema.sends.length, 1);
+  assert.equal(app.sent.length, 1);
+});
+
+test('after a wait for the configuration ends, the next caller waits again (2 s)', async () => {
+  const gladys = createFakeGladys({ selector: SELECTOR, config: CONFIG });
+  const real = gladys.getConfig.bind(gladys);
+  let calls = 0;
+  gladys.getConfig = async () => {
+    calls += 1;
+    if (calls === 1) return real();
+    throw new Error('503');
+  };
+  const { clock } = await makeApp({ gladys });
+  const first = scene(gladys, { text: 'x' });
+  await settle();
+  await clock.advance(2 * SECOND + 1);
+  assert.match((await first).error, /configuration could not be read/);
+  let second;
+  scene(gladys, { text: 'y' }).then((a) => (second = a));
+  await settle(10);
+  assert.equal(second, undefined, 'waits again');
+  await clock.advance(2 * SECOND + 1);
+  await settle();
+  assert.match(second.error, /configuration could not be read/);
+});
+
+test('error texts: a 403 sent nothing; a check that cannot connect sends no message', async () => {
+  const threema = fakeThreema({ answer: err('unexpected', { status: 403 }) });
+  const { gladys, app } = await makeApp({ threema });
+  const ack = await scene(gladys, { text: 'x' });
+  assert.match(ack.error, /unexpected answer \(HTTP 403\). Nothing was sent/);
+  assert.doesNotMatch(ack.error, /may have left/);
+  assert.equal(app.sent.length, 0);
+  threema.credits = () => {
+    throw new ThreemaError('network', { code: 'ECONNRESET' });
+  };
+  const check = await gladys.fake.action('check_account', {});
+  assert.match(check.error, /could not be reached or did not answer in time. No message is sent/);
+  assert.doesNotMatch(check.error, /may have left/);
+});
+
+test('a recipient removed while its message waits in the queue is never even counted', async () => {
+  let release;
+  const threema = fakeThreema({
+    answer: () => new Promise((resolve) => (release = () => resolve({ messageId: MESSAGE_ID }))),
+  });
+  const store = createMemoryStore();
+  const { gladys } = await makeApp({ threema, store });
+  const first = scene(gladys, { text: 'a' });
+  await settle();
+  const toBob = scene(gladys, { text: 'b', recipient: BOB });
+  await settle();
+  await gladys.fake.configUpdated({ ...CONFIG, recipients: ALICE });
+  let most = 0;
+  const save = store.save;
+  store.save = (data) => {
+    most = Math.max(most, data.sent.length);
+    return save(data);
+  };
+  release();
+  await first;
+  assert.equal((await toBob).success, false);
+  assert.equal(most, 1, '/data never held the removed one');
+});
+
+test('a recipient removed during a slow /data write: nothing sent', async () => {
+  const store = slowStore();
+  const threema = fakeThreema();
+  const { gladys, clock, app } = await makeApp({ store, threema });
+  store.release();
+  const pending = scene(gladys, { text: 'x', recipient: BOB });
+  await settle();
+  await gladys.fake.configUpdated({ ...CONFIG, recipients: ALICE });
+  await clock.advance(500);
+  store.release();
+  const ack = await pending;
+  assert.match(ack.error, /BO\*{6} is not in the list of allowed recipients/);
+  assert.equal(threema.sends.length, 0);
+  assert.equal(app.sent.length, 0);
+});
+
+test('option off: refused before the recipient is even looked at', async () => {
+  const { gladys, logger } = await makeApp();
+  const ack = await gladys.fake.sendMessage({ recipient: 'CAROL789' }, { text: 'x', file: null });
+  assert.match(ack.error, /not forwarded to Threema/);
+  assert.ok(!logger.lines.some((l) => /not an allowed recipient/.test(l)));
+  assert.doesNotMatch(lastStatus(gladys)[1], /of a user/);
+});
+
+test('a scene recipient outside the list is refused at once, before the limit or the queue', async () => {
+  const { gladys } = await makeApp({ config: { ...CONFIG, max_messages_per_hour: 1 } });
+  await scene(gladys, { text: 'x' });
+  const ack = await scene(gladys, { text: 'x', recipient: 'MALLORY1' });
+  assert.match(ack.error, /MA\*{6} is not in the list of allowed recipients/);
+});

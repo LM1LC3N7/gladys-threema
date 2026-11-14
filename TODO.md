@@ -48,8 +48,11 @@
   **off by default**, and only when the user's "My account" recipient is
   **also in the allowed list** (decision of the coordinator, review r1: any
   account can fill "My account"; outside the list nothing leaves, an INFO
-  line and the status say so, masked). Nothing at start, at a reconnection,
-  on a timer.
+  line and the status say so, masked, without hiding a problem of the
+  account, until the list changes or a send succeeds). The list, the option
+  and the ID/secret are checked again after the queue and after the /data
+  write, just before the request (review r2). Nothing at start, at a
+  reconnection, on a timer.
 - **Never sent again**: no retry anywhere. A 4xx answer (or a connection
   refused before any byte) is "nothing sent" and is not counted; a 5xx, a
   timeout or a cut connection "may have left" and stays counted.
